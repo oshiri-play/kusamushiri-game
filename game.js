@@ -4,6 +4,7 @@ const SETTINGS = {
   duration: 45_000,
   regrow: 3_000,
   grassSpacing: 27,
+  phone: { targetCells: 700, minSpacing: 15.5, maxSpacing: 20.5, actorScale: 0.75, shortViewport: 630 },
   tapRadius: 21,
   swipeRadius: 12,
   cow: { first: [2_800, 4_100], gap: [2_050, 2_600], max: 3, duration: 7_500, speed: 255, radius: 36, cadence: 100 },
@@ -35,6 +36,7 @@ const groundCtx = ground.getContext("2d");
 const grassSprites = LawnArt.grassSprites();
 const ashSprites = LawnArt.scorchSprites();
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const phonePortrait = window.matchMedia("(max-width: 650px) and (orientation: portrait)");
 const BEST_KEY = "kusamushiri.best.45s";
 const LAST_RUN_KEY = "kusamushiri.lastRun.45s";
 const SOUND_KEY = "kusamushiri.sound";
@@ -49,6 +51,7 @@ let height = 0;
 let pixelRatio = 0;
 let columns = 0;
 let rows = 0;
+let gridSpacing = SETTINGS.grassSpacing;
 let grass = [];
 let state = "ready";
 let score = 0;
@@ -188,8 +191,12 @@ function setState(next) {
 }
 
 function seedGrass() {
-  columns = Math.max(1, Math.round(width / SETTINGS.grassSpacing));
-  rows = Math.max(1, Math.round(height / SETTINGS.grassSpacing));
+  const phone = SETTINGS.phone;
+  gridSpacing = phonePortrait.matches
+    ? clamp(Math.sqrt(width * height / phone.targetCells), phone.minSpacing, phone.maxSpacing)
+    : SETTINGS.grassSpacing;
+  columns = Math.max(1, Math.round(width / gridSpacing));
+  rows = Math.max(1, Math.round(height / gridSpacing));
   grass = Array.from({ length: columns * rows }, (_, index) => {
     const roll = playRandom();
     return {
@@ -249,9 +256,29 @@ function paintGround() {
   }
 }
 
-function fitField(reseed = false) {
-  const bounds = canvas.getBoundingClientRect();
+function syncPlayViewport() {
+  if (!phonePortrait.matches) return;
+  const viewport = window.visualViewport;
+  const useVisualViewport = viewport?.height > 0 && Math.abs(viewport.scale - 1) < 0.01;
+  const availableHeight = useVisualViewport ? viewport.height : window.innerHeight;
+  if (useVisualViewport) {
+    shell.style.setProperty("--play-viewport-height", Math.floor(viewport.height) + "px");
+  } else {
+    shell.style.removeProperty("--play-viewport-height");
+  }
+  shell.classList.toggle("short-play-viewport", availableHeight <= SETTINGS.phone.shortViewport);
+}
+
+function alignPointer(bounds) {
+  if (!pointer) return;
+  pointer.point.x += pointer.bounds.left - bounds.left;
+  pointer.point.y += pointer.bounds.top - bounds.top;
+  pointer.bounds = bounds;
+}
+
+function fitField(reseed = false, bounds = canvas.getBoundingClientRect()) {
   if (!bounds.width || !bounds.height) return;
+  alignPointer(bounds);
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
   const changed = bounds.width !== width || bounds.height !== height || ratio !== pixelRatio;
   if (changed) {
@@ -264,11 +291,6 @@ function fitField(reseed = false) {
         item.target.x *= scaleX;
         item.target.y *= scaleY;
       }
-    }
-    if (pointer) {
-      pointer.point.x += pointer.bounds.left - bounds.left;
-      pointer.point.y += pointer.bounds.top - bounds.top;
-      pointer.bounds = bounds;
     }
     if (mower) {
       mower.x *= scaleX;
@@ -787,7 +809,7 @@ function restoreGrass(tuft, elapsed) {
 
 function waterStroke(from, to, elapsed, wetPoint = to) {
   const config = SETTINGS.water;
-  const rateScale = clamp(width * height / 560_000, 0.52, 1.26);
+  const rateScale = clamp(width * height / 560_000, 0.52, 1.26) * (SETTINGS.grassSpacing / gridSpacing) ** 2;
   waterCredit = Math.min(config.burst, waterCredit + Math.max(0, elapsed - waterTick) * config.perSecond * rateScale / 1000);
   waterTick = Math.max(waterTick, elapsed);
   const radius = config.radius;
@@ -869,13 +891,14 @@ function render(elapsed) {
   }
   for (const actor of actors) {
     const cow = actor.kind === "cow";
+    const scale = phonePortrait.matches ? SETTINGS.phone.actorScale : 1;
     const phase = still ? 0 : elapsed / (cow ? 35 : 63);
-    if (cow) LawnArt.cow(ctx, actor.x, actor.y, 0.89, actor.facing, phase, elapsed < actor.chewUntil);
-    else LawnArt.gardener(ctx, actor.x, actor.y, 0.84, actor.facing, phase, elapsed < actor.emoteUntil ? actor.mood : "grin");
+    if (cow) LawnArt.cow(ctx, actor.x, actor.y, 0.89 * scale, actor.facing, phase, elapsed < actor.chewUntil);
+    else LawnArt.gardener(ctx, actor.x, actor.y, 0.84 * scale, actor.facing, phase, elapsed < actor.emoteUntil ? actor.mood : "grin");
     if (elapsed < actor.emoteUntil && actor.x > 10 && actor.x < width - 10) {
       const message = cow ? "モォォ!!" : actor.mood === "laugh" ? "ガハハハ！" :
         actor.mood === "frustrated" ? "しまった！" : "";
-      if (message) LawnArt.reaction(ctx, message, clamp(actor.x, 44, width - 44), Math.max(21, actor.y - 54), cow);
+      if (message) LawnArt.reaction(ctx, message, clamp(actor.x, 44, width - 44), Math.max(21, actor.y - 54 * scale), cow);
     }
   }
   for (const fire of fires) {
@@ -985,6 +1008,7 @@ function start(seed) {
   nextFire = playRange(...SETTINGS.fire.first);
   window.scrollTo(0, 0);
   setState("playing");
+  syncPlayViewport();
   fitField(true);
   started = performance.now();
   previousFrame = started;
@@ -1074,8 +1098,9 @@ function pointOf(event, bounds) {
 canvas.addEventListener("pointerdown", (event) => {
   if (state !== "playing" || event.button !== 0 || (pointer && pointer.id !== event.pointerId)) return;
   event.preventDefault();
-  canvas.setPointerCapture(event.pointerId);
   const bounds = canvas.getBoundingClientRect();
+  fitField(false, bounds);
+  canvas.setPointerCapture(event.pointerId);
   const point = pointOf(event, bounds);
   pointer = { id: event.pointerId, point, bounds, gesture: new Set() };
   harvest(point, point, true, pointer.gesture);
@@ -1083,6 +1108,7 @@ canvas.addEventListener("pointerdown", (event) => {
 
 function trackPointer(event) {
   if (pointer?.id !== event.pointerId) return;
+  fitField();
   const events = event.getCoalescedEvents?.() ?? [];
   for (const sample of [...events, event]) {
     const point = pointOf(sample, pointer.bounds);
@@ -1113,6 +1139,8 @@ canvas.addEventListener("contextmenu", (event) => {
   if (state === "playing") event.preventDefault();
 });
 window.addEventListener("blur", releasePointer);
+window.addEventListener("resize", syncPlayViewport);
+window.visualViewport?.addEventListener("resize", syncPlayViewport);
 document.addEventListener("visibilitychange", () => {
   if (state === "playing" && performance.now() - started >= SETTINGS.duration) {
     cancelAnimationFrame(frameId);

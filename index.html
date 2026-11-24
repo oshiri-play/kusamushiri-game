@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#211935">
+  <title>草むしり45秒チャレンジ</title>
+  <meta name="description" content="暴走牛と放火おじさんが乱入。巨大隕石で焦げた草原も、なぞって復活！ 45秒の無料ブラウザゲーム。">
+  <link rel="canonical" href="https://taka1224ima3110-png.github.io/kusamushiri-game/">
+  <meta property="og:url" content="https://taka1224ima3110-png.github.io/kusamushiri-game/">
+  <meta property="og:image" content="https://taka1224ima3110-png.github.io/kusamushiri-game/share.png">
+  <meta name="twitter:image" content="https://taka1224ima3110-png.github.io/kusamushiri-game/share.png">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:title" content="草むしり45秒チャレンジ">
+  <meta property="og:description" content="牛より先に草を抜け！ 巨大隕石で焦げた草原をなぞって復活。45秒で自己ベストを狙え。">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="草むしり45秒チャレンジのロゴと、巨大隕石が迫る草原を走る牛と放火おじさん">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="草むしり45秒チャレンジ">
+  <meta name="twitter:description" content="牛より先に草を抜け！ 巨大隕石で焦げた草原をなぞって復活。45秒で自己ベストを狙え。">
+  <meta name="twitter:image:alt" content="草むしり45秒チャレンジのロゴと、巨大隕石が迫る草原を走る牛と放火おじさん">
+  <link rel="icon" type="image/svg+xml" href="sprout.svg">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="art.js"></script>
+  <script defer src="game.js"></script>
+</head>
+<body>
+  <main class="shell" data-state="ready">
+    <header class="topbar">
+      <div class="brand"><img src="sprout.svg" alt="" width="34" height="34"><span>草むしり45秒チャレンジ</span></div>
+      <button id="sound" class="sound" type="button" aria-pressed="true">
+        <span id="sound-icon" aria-hidden="true">♪</span> <span id="sound-label">効果音 ON</span>
+      </button>
+    </header>
+
+    <section class="hud" aria-label="ゲーム情報">
+      <div class="stat time" id="timer"><span>残り時間</span><strong id="time">45</strong><small>秒</small></div>
+      <div class="stat score"><span>スコア</span><strong id="score">0</strong><small>点</small></div>
+      <div class="stat best"><span>自己ベスト</span><strong id="best">0</strong><small>点</small><span id="best-gap" class="best-gap"></span></div>
+      <div class="meter">
+        <div class="meter-label"><label for="progress" id="meter-label">フィーバーゲージ</label><span id="progress-text"></span></div>
+        <progress id="progress" max="80" value="0"></progress>
+        <div class="run-stats"><span>コンボ <strong id="combo">0</strong></span><span>フィーバー得点 <strong id="fever-points">0</strong></span></div>
+      </div>
+    </section>
+
+    <div id="field-tools" class="field-tools" hidden>
+      <span id="water-status" class="water-status">焦げ跡もそのままなぞる</span>
+      <span id="play-goal" class="play-goal"></span>
+    </div>
+
+    <section class="field" id="field" aria-label="草むしりフィールド">
+      <canvas id="lawn" role="img" aria-label="草原。クリック、タップ、またはなぞると、草をむしり、焦げた場所は水で復旧する。"></canvas>
+      <div id="notices" class="notices" aria-live="polite"></div>
+      <span id="countdown" class="countdown-digit" aria-hidden="true" hidden></span>
+      <div id="intro" class="intro">
+        <div class="intro-copy">
+          <h1>草むしり<span><b>45秒</b>チャレンジ</span></h1>
+          <p id="challenge" class="challenge" hidden></p>
+          <p class="intro-description">牛より先に草を抜け！<br>焦げ跡も、なぞるだけで大復活。</p>
+          <button id="start" class="button primary" type="button"><span aria-hidden="true">▶</span> スタート</button>
+        </div>
+      </div>
+      <div id="result" class="result" hidden>
+        <div id="record-confetti" class="record-confetti" aria-hidden="true"></div>
+        <div class="result-card" role="region" aria-labelledby="result-title">
+          <p id="record" class="record" hidden>✦ NEW RECORD! ✦</p>
+          <h2 id="result-title" tabindex="-1">終了！</h2>
+          <p class="total"><strong id="total">0</strong><span> 点</span></p>
+          <p class="result-best">自己ベスト <strong id="result-best">0</strong> 点 <span id="result-gap"></span></p>
+          <p id="result-challenge" class="result-challenge" hidden></p>
+          <div class="result-stats"><span>最大コンボ <strong id="result-combo">0</strong></span><span>フィーバー得点 <strong id="result-fever">0</strong></span><span>復旧 <strong id="result-water">0</strong> 区画</span></div>
+          <button id="retry" class="button primary" type="button"><span aria-hidden="true">↻</span> もう一回！</button>
+          <a id="share" class="button share" href="https://twitter.com/intent/tweet" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">𝕏</span> Xで友達に挑戦状</a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="tips" aria-label="遊び方">
+      <div><span class="tip-icon normal-grass" aria-hidden="true">❯</span><p><strong>普通の草</strong><small>1回で 1点</small></p></div>
+      <div><span class="tip-icon hard-grass" aria-hidden="true">◆</span><p><strong>硬い草</strong><small>3回で 3点</small></p></div>
+      <div><span class="tip-icon root-grass" aria-hidden="true">✹</span><p><strong>根性草</strong><small>フィーバー限定 8点</small></p></div>
+    </footer>
+    <noscript>遊ぶにはブラウザのJavaScriptを有効にしてください。</noscript>
+  </main>
+</body>
+</html>

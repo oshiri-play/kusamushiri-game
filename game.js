@@ -37,6 +37,7 @@ const grassSprites = LawnArt.grassSprites();
 const ashSprites = LawnArt.scorchSprites();
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const phonePortrait = window.matchMedia("(max-width: 650px) and (orientation: portrait)");
+const coarsePointer = window.matchMedia("(pointer: coarse)");
 const BEST_KEY = "kusamushiri.best.45s";
 const LAST_RUN_KEY = "kusamushiri.lastRun.45s";
 const SOUND_KEY = "kusamushiri.sound";
@@ -52,6 +53,7 @@ let pixelRatio = 0;
 let columns = 0;
 let rows = 0;
 let gridSpacing = SETTINGS.grassSpacing;
+let playViewportWidth = 0;
 let grass = [];
 let state = "ready";
 let score = 0;
@@ -182,12 +184,29 @@ function clamp(value, min, max) {
 }
 
 function setState(next) {
+  const playing = next === "playing";
+  if (playing !== (state === "playing")) {
+    if (playing) {
+      document.addEventListener("touchmove", blockPlayScroll, { capture: true, passive: false });
+    } else {
+      document.removeEventListener("touchmove", blockPlayScroll, true);
+      shell.style.removeProperty("--play-viewport-height");
+      shell.style.removeProperty("--play-padding");
+      shell.style.removeProperty("--play-hud-height");
+      shell.classList.remove("short-play-viewport");
+    }
+  }
   state = next;
   shell.dataset.state = next;
-  document.body.classList.toggle("is-playing", next === "playing");
+  document.documentElement.classList.toggle("is-playing", playing);
+  document.body.classList.toggle("is-playing", playing);
   $("intro").hidden = next !== "ready";
   $("result").hidden = next !== "result";
-  $("field-tools").hidden = next !== "playing";
+  $("field-tools").hidden = !playing;
+}
+
+function blockPlayScroll(event) {
+  if (event.cancelable) event.preventDefault();
 }
 
 function seedGrass() {
@@ -256,17 +275,26 @@ function paintGround() {
   }
 }
 
-function syncPlayViewport() {
-  if (!phonePortrait.matches) return;
+function lockPlayViewport() {
+  if (state !== "playing" || !(phonePortrait.matches || coarsePointer.matches)) return;
+  // A browser toolbar can resize the visible viewport without changing the game's orientation.
+  const viewportWidth = window.innerWidth;
+  if (viewportWidth === playViewportWidth) return;
   const viewport = window.visualViewport;
   const useVisualViewport = viewport?.height > 0 && Math.abs(viewport.scale - 1) < 0.01;
   const availableHeight = useVisualViewport ? viewport.height : window.innerHeight;
-  if (useVisualViewport) {
-    shell.style.setProperty("--play-viewport-height", Math.floor(viewport.height) + "px");
-  } else {
-    shell.style.removeProperty("--play-viewport-height");
-  }
+  if (!(availableHeight > 0)) return;
+  playViewportWidth = viewportWidth;
+  shell.style.setProperty("--play-viewport-height", Math.floor(availableHeight) + "px");
   shell.classList.toggle("short-play-viewport", availableHeight <= SETTINGS.phone.shortViewport);
+  shell.style.removeProperty("--play-padding");
+  shell.style.removeProperty("--play-hud-height");
+  if (phonePortrait.matches) {
+    const { paddingTop, paddingRight, paddingBottom, paddingLeft } = window.getComputedStyle(shell);
+    shell.style.setProperty("--play-padding", [paddingTop, paddingRight, paddingBottom, paddingLeft].join(" "));
+    const hudHeight = document.querySelector(".hud").getBoundingClientRect().height;
+    shell.style.setProperty("--play-hud-height", hudHeight + "px");
+  }
 }
 
 function alignPointer(bounds) {
@@ -1007,12 +1035,13 @@ function start(seed) {
   nextCow = playRange(...SETTINGS.cow.first);
   nextFire = playRange(...SETTINGS.fire.first);
   window.scrollTo(0, 0);
+  playViewportWidth = 0;
   setState("playing");
-  syncPlayViewport();
+  updateHUD(0);
+  lockPlayViewport();
   fitField(true);
   started = performance.now();
   previousFrame = started;
-  updateHUD(0);
   render(0);
   tone(330, 555, 0.16, 0.065);
   frameId = requestAnimationFrame(frame);
@@ -1104,7 +1133,7 @@ canvas.addEventListener("pointerdown", (event) => {
   const point = pointOf(event, bounds);
   pointer = { id: event.pointerId, point, bounds, gesture: new Set() };
   harvest(point, point, true, pointer.gesture);
-});
+}, { passive: false });
 
 function trackPointer(event) {
   if (pointer?.id !== event.pointerId) return;
@@ -1139,8 +1168,7 @@ canvas.addEventListener("contextmenu", (event) => {
   if (state === "playing") event.preventDefault();
 });
 window.addEventListener("blur", releasePointer);
-window.addEventListener("resize", syncPlayViewport);
-window.visualViewport?.addEventListener("resize", syncPlayViewport);
+window.addEventListener("resize", lockPlayViewport);
 document.addEventListener("visibilitychange", () => {
   if (state === "playing" && performance.now() - started >= SETTINGS.duration) {
     cancelAnimationFrame(frameId);
